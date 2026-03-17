@@ -784,7 +784,7 @@ class App(ctk.CTk):
             "制作人: 掠蓝\n"
             "交流群: 676475076\n\n"
             "仅供个人学习与技术研究使用。\n"
-            "https://github.com/掠蓝/TraeReset")
+            "https://github.com/Ylsssq926/TraeReset")
 
 
 if __name__ == "__main__":
