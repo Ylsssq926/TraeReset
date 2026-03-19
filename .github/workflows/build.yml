@@ -1,0 +1,66 @@
+name: Build & Release
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install customtkinter pyinstaller
+
+      - name: Build exe
+        run: pyinstaller --onefile --windowed --name TraeReset --hidden-import customtkinter trae_unlock.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TraeReset-Windows
+          path: dist/TraeReset.exe
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/TraeReset.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install customtkinter pyinstaller
+
+      - name: Build app
+        run: pyinstaller --onefile --windowed --name TraeReset --hidden-import customtkinter trae_unlock.py
+
+      - name: Package
+        run: |
+          cd dist
+          tar -czf TraeReset_macOS.tar.gz TraeReset.app 2>/dev/null || tar -czf TraeReset_macOS.tar.gz TraeReset
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TraeReset-macOS
+          path: dist/TraeReset_macOS.tar.gz
+
+      - name: Upload to Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/TraeReset_macOS.tar.gz
