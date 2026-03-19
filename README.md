@@ -54,11 +54,15 @@ TraeReset 的工作流程：
 
 ### macOS
 
-```bash
-# 安装依赖
-pip3 install customtkinter
+1. 前往 [Releases](https://github.com/Ylsssq926/TraeReset/releases/latest) 下载 `TraeReset_macOS.tar.gz`
+2. 解压后双击 `TraeReset_macOS.command`
+3. 首次运行如果提示"无法打开"，右键该文件 → 打开
+4. 脚本会自动安装 customtkinter 依赖，无需手动操作
 
-# 运行
+或者手动运行：
+
+```bash
+pip3 install customtkinter
 python3 trae_unlock.py
 ```
 
