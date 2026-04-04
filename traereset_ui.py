@@ -106,7 +106,6 @@ class DisclaimerDialog(ctk.CTkToplevel):
         self.geometry("760x620")
         self.transient(master)
         if modal:
-            self.grab_set()
             self.protocol("WM_DELETE_WINDOW", self._on_modal_close)
         else:
             self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -260,6 +259,7 @@ class App(ctk.CTk):
         self.hero_stats = {}
         self.info_values = {}
         self._disclaimer_dialog = None
+        self._startup_locked = False
         self.logo_path = discover_logo_path()
         self.logo_image_small = load_logo_image(self.logo_path, (40, 40))
         self.logo_image_large = load_logo_image(self.logo_path, (48, 48))
@@ -795,6 +795,9 @@ class App(ctk.CTk):
             button.configure(state=state)
 
     def _check(self):
+        if self._startup_locked:
+            messagebox.showwarning("提示", "请先确认免责声明后再继续操作。")
+            return False
         if not self.current_dir:
             messagebox.showwarning("提示", "请先选择 Trae 数据目录")
             return False
