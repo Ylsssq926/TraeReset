@@ -71,8 +71,8 @@ app = BUNDLE(
     info_plist={
         'CFBundleName': 'TraeReset',
         'CFBundleDisplayName': 'TraeReset',
-        'CFBundleShortVersionString': '1.1.1',
-        'CFBundleVersion': '1.1.1',
+        'CFBundleShortVersionString': '1.2.0',
+        'CFBundleVersion': '1.2.0',
         'NSHighResolutionCapable': 'True',
     },
 )

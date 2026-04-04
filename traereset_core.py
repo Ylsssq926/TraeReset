@@ -17,9 +17,9 @@ import uuid
 from pathlib import Path
 
 APP_NAME = "TraeReset"
-VERSION = "1.1.1"
+VERSION = "1.2.0"
 APP_TITLE = f"{APP_NAME} v{VERSION}"
-DISCLAIMER_VERSION = "1.1.1-full-upgrade"
+DISCLAIMER_VERSION = "1.2.0-full-upgrade"
 BRAND_NAME = "掠蓝"
 PROJECT_GITHUB_URL = "https://github.com/Ylsssq926/TraeReset"
 PROJECT_RELEASES_API = "https://api.github.com/repos/Ylsssq926/TraeReset/releases/latest"
