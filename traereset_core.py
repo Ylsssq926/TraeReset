@@ -111,6 +111,31 @@ def configure_platform():
             pass
 
 
+def get_runtime_base_dir():
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent
+
+
+def discover_logo_path(base_dir=None):
+    root = Path(base_dir) if base_dir else get_runtime_base_dir()
+    image_patterns = ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.ico")
+    files = []
+    for pattern in image_patterns:
+        files.extend(sorted(root.glob(pattern)))
+
+    if not files:
+        return None
+
+    preferred = [
+        path for path in files
+        if any(keyword in path.name.lower() for keyword in ("logo", "icon", "brand"))
+    ]
+    if preferred:
+        return preferred[0]
+    return files[0] if len(files) == 1 else None
+
+
 def as_path(value):
     return Path(value).expanduser()
 

@@ -1,11 +1,26 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+from pathlib import Path
+
+
+def _discover_logo_datas():
+    root = Path('.')
+    files = []
+    for pattern in ('*.png', '*.jpg', '*.jpeg', '*.webp', '*.ico'):
+        files.extend(sorted(root.glob(pattern)))
+    preferred = [
+        path for path in files
+        if any(keyword in path.name.lower() for keyword in ('logo', 'icon', 'brand'))
+    ]
+    selected = preferred[0] if preferred else (files[0] if len(files) == 1 else None)
+    return [(str(selected), '.')] if selected else []
+
 
 a = Analysis(
     ['trae_unlock.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=_discover_logo_datas(),
     hiddenimports=['customtkinter', 'traereset_core', 'traereset_ui'],
     hookspath=[],
     hooksconfig={},

@@ -8,6 +8,7 @@ import sys
 from datetime import datetime
 
 import customtkinter as ctk
+from PIL import Image
 from tkinter import filedialog, messagebox
 
 from traereset_core import (
@@ -17,6 +18,7 @@ from traereset_core import (
     DATA_DIR_DEFAULT,
     DIR_HINT,
     DISCLAIMER_TEXT,
+    discover_logo_path,
     FONT_MONO,
     FONT_UI,
     GUIDE_TIPS,
@@ -84,6 +86,16 @@ def mono_font(size, weight="normal"):
     return ctk.CTkFont(family=FONT_MONO, size=size, weight=weight)
 
 
+def load_logo_image(size):
+    logo_path = discover_logo_path()
+    if not logo_path or not logo_path.exists():
+        return None
+    try:
+        return ctk.CTkImage(light_image=Image.open(logo_path), size=size)
+    except Exception:
+        return None
+
+
 class DisclaimerDialog(ctk.CTkToplevel):
     def __init__(self, master, on_accept=None, modal=False):
         super().__init__(master, fg_color=BG_APP)
@@ -116,7 +128,10 @@ class DisclaimerDialog(ctk.CTkToplevel):
         icon = ctk.CTkFrame(hero, fg_color=ACCENT, corner_radius=18, width=74, height=74)
         icon.pack(pady=(24, 12))
         icon.pack_propagate(False)
-        ctk.CTkLabel(icon, text="T", text_color=FG_LIGHT, font=ui_font(34, "bold")).place(relx=0.5, rely=0.5, anchor="center")
+        if self.logo_image:
+            ctk.CTkLabel(icon, text="", image=self.logo_image).place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            ctk.CTkLabel(icon, text="T", text_color=FG_LIGHT, font=ui_font(34, "bold")).place(relx=0.5, rely=0.5, anchor="center")
         ctk.CTkLabel(hero, text="TraeReset", text_color=FG_PRIMARY, font=ui_font(28, "bold")).pack()
         ctk.CTkLabel(
             hero,
@@ -237,6 +252,8 @@ class App(ctk.CTk):
         self.hero_stats = {}
         self.info_values = {}
         self._disclaimer_dialog = None
+        self.logo_image_small = load_logo_image((40, 40))
+        self.logo_image_large = load_logo_image((48, 48))
 
         self.geometry(self._center_geometry(WINDOW_WIDTH, WINDOW_HEIGHT))
         self.minsize(MIN_WIDTH, MIN_HEIGHT)
@@ -361,7 +378,11 @@ class App(ctk.CTk):
         inner = ctk.CTkFrame(hero, fg_color="transparent")
         inner.pack(fill="x", padx=22, pady=22)
 
-        ctk.CTkLabel(inner, text="更干净、更稳定的本地状态重置", text_color=FG_PRIMARY, font=ui_font(28, "bold")).pack(anchor="w")
+        hero_title = ctk.CTkFrame(inner, fg_color="transparent")
+        hero_title.pack(anchor="w")
+        if self.logo_image_large:
+            ctk.CTkLabel(hero_title, text="", image=self.logo_image_large).pack(side="left", padx=(0, 12))
+        ctk.CTkLabel(hero_title, text="更干净、更稳定的本地状态重置", text_color=FG_PRIMARY, font=ui_font(28, "bold")).pack(side="left")
         ctk.CTkLabel(
             inner,
             text="这版优先解决布局抖动、文字截断与旧方案覆盖面不足的问题，同时保留一键深度重置和最近一次备份恢复。",
