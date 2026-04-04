@@ -7,3 +7,4 @@ dist/
 *.egg-info/
 .trae_tool_config.json
 .env
+logo/

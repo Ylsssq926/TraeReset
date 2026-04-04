@@ -120,20 +120,31 @@ def get_runtime_base_dir():
 def discover_logo_path(base_dir=None):
     root = Path(base_dir) if base_dir else get_runtime_base_dir()
     image_patterns = ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.ico")
-    files = []
-    for pattern in image_patterns:
-        files.extend(sorted(root.glob(pattern)))
 
-    if not files:
-        return None
+    def collect_files(folder):
+        items = []
+        if not folder.exists() or not folder.is_dir():
+            return items
+        for pattern in image_patterns:
+            items.extend(sorted(folder.glob(pattern)))
+        return items
 
-    preferred = [
-        path for path in files
-        if any(keyword in path.name.lower() for keyword in ("logo", "icon", "brand"))
+    candidate_groups = [
+        collect_files(root / "logo"),
+        collect_files(root),
     ]
-    if preferred:
-        return preferred[0]
-    return files[0] if len(files) == 1 else None
+
+    for files in candidate_groups:
+        if not files:
+            continue
+        preferred = [
+            path for path in files
+            if any(keyword in path.name.lower() for keyword in ("logo", "icon", "brand"))
+        ]
+        if preferred:
+            return preferred[0]
+        return files[0]
+    return None
 
 
 def as_path(value):

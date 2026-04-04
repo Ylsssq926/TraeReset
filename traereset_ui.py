@@ -86,8 +86,7 @@ def mono_font(size, weight="normal"):
     return ctk.CTkFont(family=FONT_MONO, size=size, weight=weight)
 
 
-def load_logo_image(size):
-    logo_path = discover_logo_path()
+def load_logo_image(logo_path, size):
     if not logo_path or not logo_path.exists():
         return None
     try:
@@ -97,17 +96,18 @@ def load_logo_image(size):
 
 
 class DisclaimerDialog(ctk.CTkToplevel):
-    def __init__(self, master, on_accept=None, modal=False):
+    def __init__(self, master, on_accept=None, modal=False, logo_image=None):
         super().__init__(master, fg_color=BG_APP)
         self.on_accept = on_accept
         self.modal = modal
+        self.logo_image = logo_image
         self.title("免责声明")
         self.resizable(False, False)
         self.geometry("760x620")
         self.transient(master)
         if modal:
             self.grab_set()
-            self.protocol("WM_DELETE_WINDOW", self._reject)
+            self.protocol("WM_DELETE_WINDOW", self._on_modal_close)
         else:
             self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._build()
@@ -201,7 +201,7 @@ class DisclaimerDialog(ctk.CTkToplevel):
             ).pack(side="left", padx=(0, 12))
             ctk.CTkButton(
                 actions,
-                text="退出",
+                text="退出程序",
                 width=160,
                 height=48,
                 fg_color=GHOST,
@@ -231,6 +231,14 @@ class DisclaimerDialog(ctk.CTkToplevel):
             self.on_accept()
         self.destroy()
 
+    def _on_modal_close(self):
+        messagebox.showinfo(
+            "提示",
+            "首次启动请先确认免责声明。\n如不继续使用，请点击下方“退出程序”。",
+            parent=self,
+        )
+        self.lift()
+
     def _reject(self):
         if self.modal:
             self.master.destroy()
@@ -252,8 +260,9 @@ class App(ctk.CTk):
         self.hero_stats = {}
         self.info_values = {}
         self._disclaimer_dialog = None
-        self.logo_image_small = load_logo_image((40, 40))
-        self.logo_image_large = load_logo_image((48, 48))
+        self.logo_path = discover_logo_path()
+        self.logo_image_small = load_logo_image(self.logo_path, (40, 40))
+        self.logo_image_large = load_logo_image(self.logo_path, (48, 48))
 
         self.geometry(self._center_geometry(WINDOW_WIDTH, WINDOW_HEIGHT))
         self.minsize(MIN_WIDTH, MIN_HEIGHT)
@@ -283,7 +292,6 @@ class App(ctk.CTk):
             self.dir_text.configure(state="disabled")
             self._log(f"检测到默认目录: {DATA_DIR_DEFAULT}", "ok")
             self._set_summary("已加载默认目录")
-            self._do_refresh(silent=True)
         else:
             self._set_status_badge("未找到默认目录", DANGER)
             self.runtime_var.set("未检测到默认 Trae 目录，请手动选择。")
@@ -294,8 +302,12 @@ class App(ctk.CTk):
         self.lift()
         self.focus_force()
 
+        self.after(30, self._refresh_runtime_state)
+        if self.current_dir:
+            self.after(80, lambda: self._do_refresh(silent=True))
+
         if not has_accepted_disclaimer():
-            self.after(60, self._show_initial_disclaimer)
+            self.after(140, self._show_initial_disclaimer)
 
     def _build_main(self):
         root = ctk.CTkFrame(self, fg_color=BG_APP)
@@ -710,13 +722,16 @@ class App(ctk.CTk):
             justify="left",
         ).pack(anchor="w", padx=14, pady=(0, 12))
 
+    def _refresh_runtime_state(self):
+        self.runtime_var.set("Trae 正在运行" if is_trae_running() else "Trae 当前未运行，可安全执行本地重置")
+
     def _show_initial_disclaimer(self):
         if self._disclaimer_dialog and self._disclaimer_dialog.winfo_exists():
             return
-        self._disclaimer_dialog = DisclaimerDialog(self, on_accept=self._on_disclaimer_accepted, modal=True)
+        self._disclaimer_dialog = DisclaimerDialog(self, on_accept=self._on_disclaimer_accepted, modal=True, logo_image=self.logo_image_large)
 
     def _show_disclaimer(self):
-        DisclaimerDialog(self, modal=False)
+        DisclaimerDialog(self, modal=False, logo_image=self.logo_image_large)
 
     def _on_disclaimer_accepted(self):
         self._set_summary("免责声明已确认")
@@ -796,6 +811,7 @@ class App(ctk.CTk):
             return
         status = get_status(self.current_dir)
         self._update_status_panel(status)
+        self.after(10, self._refresh_runtime_state)
         if not silent:
             self._set_summary("状态已刷新")
             self._log("已刷新目录状态", "info")
