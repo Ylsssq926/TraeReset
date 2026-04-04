@@ -5,8 +5,10 @@
 cd "$(dirname "$0")"
 
 echo "================================"
-echo "  TraeReset - Trae 设备限制重置工具"
-echo "  制作人: 掠蓝 | 交流群: 676475076"
+echo "  TraeReset - Trae 本地状态深度重置工具"
+echo "  开源作者: 掠蓝"
+echo "  GitHub: https://github.com/Ylsssq926/TraeReset"
+echo "  若你是付费购买获得，请立即退款，勿二次倒卖"
 echo "================================"
 echo ""
 
@@ -24,13 +26,13 @@ fi
 PY=$(command -v python3)
 echo "[信息] Python: $PY ($(python3 --version 2>&1))"
 
-# 检查并安装 customtkinter
+# 检查并安装依赖
 if ! python3 -c "import customtkinter" 2>/dev/null; then
-    echo "[信息] 正在安装 customtkinter..."
-    python3 -m pip install customtkinter --quiet
+    echo "[信息] 正在安装依赖..."
+    python3 -m pip install -r requirements.txt --quiet
     if [ $? -ne 0 ]; then
-        echo "[错误] 安装 customtkinter 失败，请手动执行："
-        echo "  pip3 install customtkinter"
+        echo "[错误] 安装依赖失败，请手动执行："
+        echo "  pip3 install -r requirements.txt"
         echo ""
         echo "按回车键退出..."
         read
