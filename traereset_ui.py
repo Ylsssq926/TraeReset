@@ -96,19 +96,14 @@ def load_logo_image(logo_path, size):
 
 
 class DisclaimerDialog(ctk.CTkToplevel):
-    def __init__(self, master, on_accept=None, modal=False, logo_image=None):
+    def __init__(self, master, logo_image=None):
         super().__init__(master, fg_color=BG_APP)
-        self.on_accept = on_accept
-        self.modal = modal
         self.logo_image = logo_image
         self.title("免责声明")
         self.resizable(False, False)
         self.geometry("760x620")
         self.transient(master)
-        if modal:
-            self.protocol("WM_DELETE_WINDOW", self._on_modal_close)
-        else:
-            self.protocol("WM_DELETE_WINDOW", self.destroy)
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
         self._build()
         self.update_idletasks()
         x = master.winfo_rootx() + max(0, (master.winfo_width() - 760) // 2)
@@ -183,66 +178,18 @@ class DisclaimerDialog(ctk.CTkToplevel):
             justify="left",
         ).pack(anchor="w", padx=14, pady=(0, 12))
 
-        if self.modal:
-            actions = ctk.CTkFrame(body, fg_color="transparent")
-            actions.pack(fill="x", pady=(18, 0))
-            ctk.CTkButton(
-                actions,
-                text="同意并继续",
-                width=220,
-                height=48,
-                fg_color=ACCENT,
-                hover_color=ACCENT_HOVER,
-                text_color=FG_LIGHT,
-                corner_radius=16,
-                font=ui_font(15, "bold"),
-                command=self._accept,
-            ).pack(side="left", padx=(0, 12))
-            ctk.CTkButton(
-                actions,
-                text="退出程序",
-                width=160,
-                height=48,
-                fg_color=GHOST,
-                hover_color=GHOST_HOVER,
-                text_color=FG_PRIMARY,
-                corner_radius=16,
-                font=ui_font(15),
-                command=self._reject,
-            ).pack(side="left")
-        else:
-            ctk.CTkButton(
-                body,
-                text="关闭",
-                width=140,
-                height=44,
-                fg_color=GHOST,
-                hover_color=GHOST_HOVER,
-                text_color=FG_PRIMARY,
-                corner_radius=16,
-                font=ui_font(14),
-                command=self.destroy,
-            ).pack(anchor="e", pady=(18, 0))
-
-    def _accept(self):
-        save_disclaimer_accepted()
-        if self.on_accept:
-            self.on_accept()
-        self.destroy()
-
-    def _on_modal_close(self):
-        messagebox.showinfo(
-            "提示",
-            "首次启动请先确认免责声明。\n如不继续使用，请点击下方“退出程序”。",
-            parent=self,
-        )
-        self.lift()
-
-    def _reject(self):
-        if self.modal:
-            self.master.destroy()
-            sys.exit(0)
-        self.destroy()
+        ctk.CTkButton(
+            body,
+            text="关闭",
+            width=140,
+            height=44,
+            fg_color=GHOST,
+            hover_color=GHOST_HOVER,
+            text_color=FG_PRIMARY,
+            corner_radius=16,
+            font=ui_font(14),
+            command=self.destroy,
+        ).pack(anchor="e", pady=(18, 0))
 
 
 class App(ctk.CTk):
@@ -258,7 +205,6 @@ class App(ctk.CTk):
         self.action_btns = []
         self.hero_stats = {}
         self.info_values = {}
-        self._disclaimer_dialog = None
         self._startup_locked = False
         self.logo_path = discover_logo_path()
         self.logo_image_small = load_logo_image(self.logo_path, (40, 40))
@@ -286,10 +232,7 @@ class App(ctk.CTk):
 
         if DATA_DIR_DEFAULT.is_dir():
             self.current_dir = DATA_DIR_DEFAULT
-            self.dir_text.configure(state="normal")
-            self.dir_text.delete("1.0", "end")
-            self.dir_text.insert("1.0", str(DATA_DIR_DEFAULT))
-            self.dir_text.configure(state="disabled")
+            self._set_textbox_value(self.dir_text, str(DATA_DIR_DEFAULT))
             self._log(f"检测到默认目录: {DATA_DIR_DEFAULT}", "ok")
             self._set_summary("已加载默认目录")
         else:
@@ -307,14 +250,14 @@ class App(ctk.CTk):
             self.after(80, lambda: self._do_refresh(silent=True))
 
         if not has_accepted_disclaimer():
-            self.after(140, self._show_initial_disclaimer)
+            self.after(120, self._show_startup_gate)
 
     def _build_main(self):
-        root = ctk.CTkFrame(self, fg_color=BG_APP)
-        root.pack(fill="both", expand=True, padx=18, pady=18)
+        self.root_frame = ctk.CTkFrame(self, fg_color=BG_APP)
+        self.root_frame.pack(fill="both", expand=True, padx=18, pady=18)
 
-        self._build_topbar(root)
-        content = ctk.CTkFrame(root, fg_color="transparent")
+        self._build_topbar(self.root_frame)
+        content = ctk.CTkFrame(self.root_frame, fg_color="transparent")
         content.pack(fill="both", expand=True, pady=(14, 0))
         content.grid_columnconfigure(0, weight=5)
         content.grid_columnconfigure(1, weight=4)
@@ -331,6 +274,7 @@ class App(ctk.CTk):
         self._build_log_card(left)
         self._build_action_card(right)
         self._build_health_card(right)
+        self._build_startup_gate()
 
     def _build_topbar(self, parent):
         bar = ctk.CTkFrame(parent, fg_color=BG_SURFACE, corner_radius=24, border_width=1, border_color=BORDER)
@@ -340,7 +284,11 @@ class App(ctk.CTk):
 
         left = ctk.CTkFrame(inner, fg_color="transparent")
         left.pack(side="left", fill="x", expand=True)
-        ctk.CTkLabel(left, text="TraeReset", text_color=FG_PRIMARY, font=ui_font(26, "bold")).pack(anchor="w")
+        title_row = ctk.CTkFrame(left, fg_color="transparent")
+        title_row.pack(anchor="w")
+        if self.logo_image_small:
+            ctk.CTkLabel(title_row, text="", image=self.logo_image_small).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(title_row, text="TraeReset", text_color=FG_PRIMARY, font=ui_font(26, "bold")).pack(side="left")
         ctk.CTkLabel(left, textvariable=self.runtime_var, text_color=FG_SECONDARY, font=ui_font(12)).pack(anchor="w", pady=(4, 0))
 
         right = ctk.CTkFrame(inner, fg_color="transparent")
@@ -397,7 +345,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(hero_title, text="更干净、更稳定的本地状态重置", text_color=FG_PRIMARY, font=ui_font(28, "bold")).pack(side="left")
         ctk.CTkLabel(
             inner,
-            text="这版优先解决布局抖动、文字截断与旧方案覆盖面不足的问题，同时保留一键深度重置和最近一次备份恢复。",
+            text="用于清理 Trae 本地账号状态、缓存目录与设备标识，并保持更清晰的操作流程。",
             text_color=FG_SECONDARY,
             font=ui_font(13),
             wraplength=700,
@@ -462,7 +410,7 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(
             inner,
-            text="路径、备份和恢复都会基于当前目录执行。为避免文字被切断，路径展示改成了只读文本框。",
+            text="路径、备份和恢复都会基于当前目录执行。目录内容会显示在下方只读文本区域。",
             text_color=FG_SECONDARY,
             font=ui_font(12),
             wraplength=720,
@@ -520,7 +468,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(inner, text="当前状态", text_color=FG_PRIMARY, font=ui_font(18, "bold")).pack(anchor="w")
         ctk.CTkLabel(
             inner,
-            text="所有长文本都改为可自动换行或只读文本容器，避免中文字体下的截断。",
+            text="这里展示当前账号残留、设备 ID 和缓存覆盖范围。",
             text_color=FG_SECONDARY,
             font=ui_font(12),
             wraplength=720,
@@ -605,7 +553,7 @@ class App(ctk.CTk):
         ctk.CTkLabel(inner, text="操作面板", text_color=FG_PRIMARY, font=ui_font(18, "bold")).pack(anchor="w")
         ctk.CTkLabel(
             inner,
-            text="主按钮保留一键深度重置，单项按钮按“账号状态、缓存目录、设备标识、刷新”分开。",
+            text="推荐优先使用一键深度重置。单项按钮适合单独执行局部步骤。",
             text_color=FG_SECONDARY,
             font=ui_font(12),
             wraplength=420,
@@ -722,22 +670,126 @@ class App(ctk.CTk):
             justify="left",
         ).pack(anchor="w", padx=14, pady=(0, 12))
 
+    def _build_startup_gate(self):
+        self.startup_gate = ctk.CTkFrame(self.root_frame, fg_color=BG_APP, corner_radius=28, border_width=0)
+
+        shell = ctk.CTkFrame(self.startup_gate, fg_color="transparent")
+        shell.place(relx=0.5, rely=0.5, anchor="center")
+
+        card = ctk.CTkFrame(shell, fg_color=BG_SURFACE, corner_radius=28, border_width=1, border_color=BORDER)
+        card.pack(fill="both", expand=True)
+
+        hero = ctk.CTkFrame(card, fg_color=BG_HERO, corner_radius=24)
+        hero.pack(fill="x", padx=20, pady=20)
+        icon = ctk.CTkFrame(hero, fg_color=ACCENT, corner_radius=18, width=78, height=78)
+        icon.pack(pady=(24, 12))
+        icon.pack_propagate(False)
+        if self.logo_image_large:
+            ctk.CTkLabel(icon, text="", image=self.logo_image_large).place(relx=0.5, rely=0.5, anchor="center")
+        else:
+            ctk.CTkLabel(icon, text="T", text_color=FG_LIGHT, font=ui_font(34, "bold")).place(relx=0.5, rely=0.5, anchor="center")
+        ctk.CTkLabel(hero, text="TraeReset", text_color=FG_PRIMARY, font=ui_font(28, "bold")).pack()
+        ctk.CTkLabel(
+            hero,
+            text="首次启动前请先确认免责声明。确认后即可进入主界面继续操作。",
+            text_color=FG_SECONDARY,
+            font=ui_font(13),
+        ).pack(pady=(6, 24))
+
+        body = ctk.CTkFrame(card, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=28, pady=(0, 24))
+        ctk.CTkLabel(body, text="免责声明", text_color=FG_PRIMARY, font=ui_font(18, "bold")).pack(anchor="w")
+        ctk.CTkLabel(
+            body,
+            text="本工具只修改本地用户数据，不改动 Trae 程序本体。",
+            text_color=FG_SECONDARY,
+            font=ui_font(13),
+            wraplength=700,
+            justify="left",
+        ).pack(anchor="w", pady=(6, 12))
+
+        textbox = ctk.CTkTextbox(
+            body,
+            width=720,
+            height=220,
+            fg_color=BG_SOFT,
+            text_color=FG_SECONDARY,
+            corner_radius=18,
+            border_width=1,
+            border_color=BORDER,
+            font=ui_font(13),
+            wrap="word",
+        )
+        textbox.insert("1.0", DISCLAIMER_TEXT)
+        textbox.configure(state="disabled")
+        textbox.pack(fill="x")
+
+        source_card = ctk.CTkFrame(body, fg_color=BG_HERO, corner_radius=18, border_width=1, border_color=BORDER)
+        source_card.pack(fill="x", pady=(14, 0))
+        ctk.CTkLabel(source_card, text="开源来源与反转售提示", text_color=FG_PRIMARY, font=ui_font(14, "bold")).pack(anchor="w", padx=14, pady=(12, 4))
+        ctk.CTkLabel(
+            source_card,
+            text=PERSISTENT_NOTICE_TEXT,
+            text_color=FG_SECONDARY,
+            font=ui_font(12),
+            wraplength=680,
+            justify="left",
+        ).pack(anchor="w", padx=14, pady=(0, 12))
+
+        actions = ctk.CTkFrame(body, fg_color="transparent")
+        actions.pack(fill="x", pady=(20, 0))
+        ctk.CTkButton(
+            actions,
+            text="同意并继续",
+            width=220,
+            height=48,
+            fg_color=ACCENT,
+            hover_color=ACCENT_HOVER,
+            text_color=FG_LIGHT,
+            corner_radius=16,
+            font=ui_font(15, "bold"),
+            command=self._accept_startup_gate,
+        ).pack(side="left", padx=(0, 12))
+        ctk.CTkButton(
+            actions,
+            text="退出程序",
+            width=160,
+            height=48,
+            fg_color=GHOST,
+            hover_color=GHOST_HOVER,
+            text_color=FG_PRIMARY,
+            corner_radius=16,
+            font=ui_font(15),
+            command=self._exit_from_startup_gate,
+        ).pack(side="left")
+
     def _refresh_runtime_state(self):
         self.runtime_var.set("Trae 正在运行" if is_trae_running() else "Trae 当前未运行，可安全执行本地重置")
 
-    def _show_initial_disclaimer(self):
-        if self._disclaimer_dialog and self._disclaimer_dialog.winfo_exists():
+    def _show_startup_gate(self):
+        if self._startup_locked:
             return
-        self._disclaimer_dialog = DisclaimerDialog(self, on_accept=self._on_disclaimer_accepted, modal=True, logo_image=self.logo_image_large)
+        self._startup_locked = True
+        self._set_btns(False)
+        self.startup_gate.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.startup_gate.lift()
 
-    def _show_disclaimer(self):
-        DisclaimerDialog(self, modal=False, logo_image=self.logo_image_large)
-
-    def _on_disclaimer_accepted(self):
+    def _accept_startup_gate(self):
+        save_disclaimer_accepted()
+        self._startup_locked = False
+        self.startup_gate.place_forget()
+        self._set_btns(True)
         self._set_summary("免责声明已确认")
         self._log("用户已确认免责声明", "info")
         self._log(f"来源提示: {PROJECT_GITHUB_URL}", "dim")
         self._log(REFUND_NOTICE, "warn")
+
+    def _exit_from_startup_gate(self):
+        self.destroy()
+        sys.exit(0)
+
+    def _show_disclaimer(self):
+        DisclaimerDialog(self, logo_image=self.logo_image_large)
 
     def _set_summary(self, text):
         self.summary_var.set(text)
@@ -776,8 +828,6 @@ class App(ctk.CTk):
         else:
             self._set_status_badge("状态较干净", SUCCESS)
 
-        self.runtime_var.set("Trae 正在运行" if is_trae_running() else "Trae 当前未运行，可安全执行本地重置")
-
     def _log(self, message, tag=None):
         timestamp = datetime.now().strftime("%H:%M:%S")
         line = f"[{timestamp}] {message}\n"
@@ -796,7 +846,6 @@ class App(ctk.CTk):
 
     def _check(self):
         if self._startup_locked:
-            messagebox.showwarning("提示", "请先确认免责声明后再继续操作。")
             return False
         if not self.current_dir:
             messagebox.showwarning("提示", "请先选择 Trae 数据目录")
