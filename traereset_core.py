@@ -12,6 +12,7 @@ import secrets
 import shutil
 import subprocess
 import sys
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -21,6 +22,7 @@ APP_TITLE = f"{APP_NAME} v{VERSION}"
 DISCLAIMER_VERSION = "1.1.1-full-upgrade"
 BRAND_NAME = "掠蓝"
 PROJECT_GITHUB_URL = "https://github.com/Ylsssq926/TraeReset"
+PROJECT_RELEASES_API = "https://api.github.com/repos/Ylsssq926/TraeReset/releases/latest"
 ANTI_RESALE_NOTICE = "本项目为掠蓝开源作品，请勿二次售卖。"
 REFUND_NOTICE = "如果你是付费购买获得本工具，请立即退款。"
 SOURCE_NOTICE = f"开源作者：{BRAND_NAME}"
@@ -86,11 +88,26 @@ RESET_PATHS = [
 ]
 
 GUIDE_TIPS = [
-    "操作前先完全退出 Trae，包括托盘或后台残留进程。",
-    "一键深度重置会同时清理账号状态、缓存目录和设备标识。",
-    "所有修改前都会自动生成 .bak 备份，便于恢复最近一次状态。",
-    "如果默认目录未检测到，可使用“选择目录”手动定位 Trae 数据目录。",
-    "本项目为掠蓝开源作品，如系购买获得请立即退款。",
+    {
+        "zh-CN": "操作前先完全退出 Trae，包括托盘或后台残留进程。",
+        "en-US": "Completely quit Trae before resetting, including tray and background processes.",
+    },
+    {
+        "zh-CN": "一键深度重置会同时清理账号状态、缓存目录和设备标识。",
+        "en-US": "Deep reset clears account traces, cache targets, and device identifiers together.",
+    },
+    {
+        "zh-CN": "所有修改前都会自动生成 .bak 备份，便于恢复最近一次状态。",
+        "en-US": "A .bak backup is created before changes so the latest state can be restored.",
+    },
+    {
+        "zh-CN": "如果默认目录未检测到，可使用“选择目录”手动定位 Trae 数据目录。",
+        "en-US": "If the default directory is not detected, use Select Folder to locate the Trae data directory.",
+    },
+    {
+        "zh-CN": "本项目为掠蓝开源作品，如系购买获得请立即退款。",
+        "en-US": "This project is open source by Luelan. If you paid for it, request a refund immediately.",
+    },
 ]
 
 DISCLAIMER_TEXT = (
@@ -99,6 +116,15 @@ DISCLAIMER_TEXT = (
     "3. 一键深度重置会清理本地账号状态、缓存目录和设备标识，适合旧版方案失效时使用。\n\n"
     "4. 本工具不修改 Trae 程序本体，仅处理本地用户数据。\n\n"
     f"5. 开源作者：{BRAND_NAME}\n项目地址：{PROJECT_GITHUB_URL}\n\n"
+    f"6. {ANTI_RESALE_NOTICE}\n{REFUND_NOTICE}"
+)
+
+DISCLAIMER_TEXT_EN = (
+    "1. This tool is intended for personal study and technical research only.\n\n"
+    "2. Existing files and directories are backed up before changes. Restore only recovers the latest backup set.\n\n"
+    "3. Deep reset clears local account state, cache targets, and device identifiers when older reset methods no longer work.\n\n"
+    "4. The tool does not modify the Trae application itself. It only touches local user data.\n\n"
+    f"5. Open-source author: {BRAND_NAME}\nProject URL: {PROJECT_GITHUB_URL}\n\n"
     f"6. {ANTI_RESALE_NOTICE}\n{REFUND_NOTICE}"
 )
 
@@ -179,6 +205,18 @@ def save_config(config):
             json.dump(config, file, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def get_language():
+    config = load_config()
+    language = config.get("language", "zh-CN")
+    return language if language in {"zh-CN", "en-US"} else "zh-CN"
+
+
+def save_language(language):
+    config = load_config()
+    config["language"] = language
+    save_config(config)
 
 
 def has_accepted_disclaimer():
@@ -357,37 +395,125 @@ def extract_accounts(storage):
         try:
             auth = json.loads(value) if isinstance(value, str) else value
             account = auth.get("account", {})
-            name = account.get("username", "未知")
-            contact = account.get("email", "") or account.get("nonPlainTextMobile", "")
-            accounts.append(f"{name} ({contact})" if contact else name)
+            username = account.get("username", "未知")
+            email = account.get("email", "")
+            phone = account.get("nonPlainTextMobile", "")
+            contact = email or phone
+            label = f"{username} ({contact})" if contact else username
+            accounts.append(
+                {
+                    "username": username,
+                    "email": email,
+                    "phone": phone,
+                    "contact": contact,
+                    "display_name": username,
+                    "label": label,
+                }
+            )
         except Exception:
-            accounts.append("(解析失败)")
+            accounts.append(
+                {
+                    "username": "未知",
+                    "email": "",
+                    "phone": "",
+                    "contact": "",
+                    "display_name": "未知账号",
+                    "label": "(解析失败)",
+                }
+            )
     return accounts
 
 
-def get_status(data_dir):
+def get_status(data_dir, runtime_running=None):
     base = as_path(data_dir)
     storage = read_storage(base)
     local_state = read_local_state(base)
-    accounts = extract_accounts(storage)
+    account_items = extract_accounts(storage)
     storage_keys = collect_storage_keys(storage)
     session_targets = COOKIE_PATHS + RESET_PATHS
     existing_session_paths = [str(rel) for rel in session_targets if (base / rel).exists()]
     telemetry = storage or {}
+    running = is_trae_running() if runtime_running is None else runtime_running
+    has_residual = bool(account_items or storage_keys or existing_session_paths)
+    if not base.exists():
+        risk_summary = "未找到数据目录"
+        summary_level = "missing"
+    elif running:
+        risk_summary = "Trae 正在运行，需先关闭后再执行重置"
+        summary_level = "blocked"
+    elif has_residual:
+        risk_summary = "检测到本地账号、存储键或缓存残留，建议确认账号后再重置"
+        summary_level = "attention"
+    else:
+        risk_summary = "未发现明显账号缓存，可按需继续"
+        summary_level = "ready"
 
     return {
         "machine_id": read_machineid(base) or "未找到",
         "telemetry_machine_id": telemetry.get("telemetry.machineId", "未找到"),
         "dev_device_id": telemetry.get("telemetry.devDeviceId", "未找到"),
         "sqm_id": telemetry.get("telemetry.sqmId", "未找到"),
-        "accounts": accounts,
+        "accounts": [item["label"] for item in account_items],
+        "account_items": account_items,
+        "account_count": len(account_items),
         "storage_key_count": len(storage_keys),
         "session_path_count": len(existing_session_paths),
         "session_paths": existing_session_paths,
         "has_state_db": (base / STATE_DB_REL).exists(),
         "has_local_state": isinstance(local_state, dict),
-        "risk_summary": "检测到多处本地账号与会话状态" if storage_keys or existing_session_paths else "未发现明显账号缓存",
+        "risk_summary": risk_summary,
+        "summary_level": summary_level,
+        "runtime_running": running,
     }
+
+
+def parse_version_parts(version):
+    version = version.lstrip("vV")
+    parts = []
+    for item in version.split("."):
+        try:
+            parts.append(int(item))
+        except ValueError:
+            parts.append(0)
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts[:3])
+
+
+def check_for_updates(timeout=8):
+    try:
+        request = urllib.request.Request(
+            PROJECT_RELEASES_API,
+            headers={
+                "User-Agent": f"{APP_NAME}/{VERSION}",
+                "Accept": "application/vnd.github+json",
+            },
+        )
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+
+        latest_tag = payload.get("tag_name", "")
+        latest_version = latest_tag.lstrip("vV")
+        release_url = payload.get("html_url", PROJECT_GITHUB_URL)
+        current = parse_version_parts(VERSION)
+        latest = parse_version_parts(latest_version)
+        return {
+            "ok": True,
+            "has_update": latest > current,
+            "current_version": VERSION,
+            "latest_version": latest_version or VERSION,
+            "release_url": release_url,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "has_update": False,
+            "current_version": VERSION,
+            "latest_version": VERSION,
+            "release_url": PROJECT_GITHUB_URL,
+            "error": str(exc),
+        }
 
 
 def clear_accounts(data_dir):
