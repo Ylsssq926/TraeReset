@@ -179,6 +179,7 @@ STRINGS = {
         "update_status_latest": "已是最新版本",
         "update_status_available": "发现新版本 {latest}",
         "update_status_failed": "检查失败：{error}",
+        "update_status_failed_cert": "检查失败：证书验证异常",
         "startup_title": "首次启动前请先确认免责声明",
         "startup_subtitle": "确认后即可进入主界面继续操作。",
         "startup_body": "本工具只修改本地用户数据，不改动 Trae 程序本体。",
@@ -210,6 +211,9 @@ STRINGS = {
         "update_available_msg": "当前版本: {current}\n最新版本: {latest}\n\n是否打开发布页？",
         "update_failed_title": "检查更新失败",
         "update_failed_msg": "无法获取最新版本信息。\n\n{error}",
+        "update_failed_manual_msg": "无法获取最新版本信息。\n\n{error}\n\n你仍可手动打开发布页查看最新版本。\n\n是否现在打开发布页？",
+        "update_failed_cert_msg": "当前环境无法验证 GitHub 证书，可能与代理、网络安全软件或本机证书链有关。\n\n工具主功能不受影响，你仍可手动打开发布页查看最新版本。\n\n是否现在打开发布页？",
+        "update_failed_cert_log": "更新检查失败：GitHub 证书验证异常（{error}）",
         "admin_hint": "当前不是管理员权限。若目录中文件仍被占用，可提升权限后再次执行。",
         "admin_restart": "管理员重启",
     },
@@ -298,6 +302,7 @@ STRINGS = {
         "update_status_latest": "Already on the latest release",
         "update_status_available": "Update available: {latest}",
         "update_status_failed": "Check failed: {error}",
+        "update_status_failed_cert": "Check failed: certificate verification",
         "startup_title": "Please confirm the disclaimer before first use",
         "startup_subtitle": "Accept it to continue into the main interface.",
         "startup_body": "This tool only changes local user data. It does not modify the Trae application itself.",
@@ -329,6 +334,9 @@ STRINGS = {
         "update_available_msg": "Current version: {current}\nLatest version: {latest}\n\nOpen the release page now?",
         "update_failed_title": "Update check failed",
         "update_failed_msg": "Unable to fetch the latest release information.\n\n{error}",
+        "update_failed_manual_msg": "Unable to fetch the latest release information.\n\n{error}\n\nYou can still open the release page manually to check the latest version.\n\nOpen it now?",
+        "update_failed_cert_msg": "The current environment could not verify GitHub's certificate. This may be caused by a proxy, security software, or the local certificate chain.\n\nThe main reset features are not affected, and you can still open the release page manually to check the latest version.\n\nOpen it now?",
+        "update_failed_cert_log": "Update check failed: GitHub certificate verification error ({error})",
         "admin_hint": "This app is not running as administrator. Elevate only if files remain locked.",
         "admin_restart": "Restart as Admin",
     },
@@ -1093,9 +1101,16 @@ class App(ctk.CTk):
         self._set_update_buttons(True)
         if not result["ok"]:
             self._set_summary(self.t("summary_update_failed"))
+            if result.get("error_type") == "cert":
+                self._set_update_status("update_status_failed_cert")
+                self._log(self.t("update_failed_cert_log", error=result["error"]), "err")
+                if messagebox.askyesno(self.t("update_failed_title"), self.t("update_failed_cert_msg")):
+                    webbrowser.open(result["release_url"])
+                return
             self._set_update_status("update_status_failed", error=result["error"])
             self._log(self.t("update_failed_msg", error=result["error"]), "err")
-            messagebox.showwarning(self.t("update_failed_title"), self.t("update_failed_msg", error=result["error"]))
+            if messagebox.askyesno(self.t("update_failed_title"), self.t("update_failed_manual_msg", error=result["error"])):
+                webbrowser.open(result["release_url"])
             return
         if not result["has_update"]:
             self._set_summary(self.t("summary_update_latest"))

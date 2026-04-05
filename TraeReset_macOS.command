@@ -31,16 +31,16 @@ fi
 PY=$(command -v python3)
 echo "[Info] Python: $PY ($(python3 --version 2>&1))"
 
-if ! python3 -c "import customtkinter; import PIL" 2>/dev/null; then
+if ! python3 -c "import customtkinter; import PIL; import certifi" 2>/dev/null; then
     echo "[Info] Installing runtime dependencies..."
     echo "[信息] 正在安装运行依赖..."
-    python3 -m pip install customtkinter pillow --quiet
+    python3 -m pip install customtkinter pillow certifi --quiet
     if [ $? -ne 0 ]; then
         echo "[Error] Failed to install runtime dependencies. Run manually:"
-        echo "  pip3 install customtkinter pillow"
+        echo "  pip3 install customtkinter pillow certifi"
         echo ""
         echo "[错误] 安装运行依赖失败，请手动执行："
-        echo "  pip3 install customtkinter pillow"
+        echo "  pip3 install customtkinter pillow certifi"
         echo ""
         echo "Press Enter to exit... / 按回车键退出..."
         read

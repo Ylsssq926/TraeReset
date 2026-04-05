@@ -10,14 +10,21 @@ import os
 import platform
 import secrets
 import shutil
+import ssl
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 import uuid
 from pathlib import Path
 
+try:
+    import certifi
+except Exception:
+    certifi = None
+
 APP_NAME = "TraeReset"
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 APP_TITLE = f"{APP_NAME} v{VERSION}"
 DISCLAIMER_VERSION = "1.2.0-full-upgrade"
 BRAND_NAME = "掠蓝"
@@ -480,6 +487,39 @@ def parse_version_parts(version):
     return tuple(parts[:3])
 
 
+def build_update_ssl_context():
+    try:
+        if certifi:
+            return ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        pass
+    return ssl.create_default_context()
+
+
+def classify_update_error(exc):
+    text = str(exc)
+    reason = getattr(exc, "reason", None)
+
+    if isinstance(exc, ssl.SSLCertVerificationError):
+        return "cert", text
+    if isinstance(exc, ssl.SSLError) and "certificate" in text.lower():
+        return "cert", text
+
+    if isinstance(exc, urllib.error.URLError):
+        if isinstance(reason, ssl.SSLCertVerificationError):
+            return "cert", str(reason)
+        if isinstance(reason, ssl.SSLError) and "certificate" in str(reason).lower():
+            return "cert", str(reason)
+        return "network", str(reason or exc)
+
+    lowered = text.lower()
+    if "certificate verify failed" in lowered or "local issuer certificate" in lowered:
+        return "cert", text
+    if "timed out" in lowered or "timeout" in lowered:
+        return "network", text
+    return "other", text
+
+
 def check_for_updates(timeout=8):
     try:
         request = urllib.request.Request(
@@ -489,7 +529,8 @@ def check_for_updates(timeout=8):
                 "Accept": "application/vnd.github+json",
             },
         )
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        context = build_update_ssl_context()
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
             payload = json.loads(response.read().decode("utf-8"))
 
         latest_tag = payload.get("tag_name", "")
@@ -504,15 +545,18 @@ def check_for_updates(timeout=8):
             "latest_version": latest_version or VERSION,
             "release_url": release_url,
             "error": "",
+            "error_type": "",
         }
     except Exception as exc:
+        error_type, error_text = classify_update_error(exc)
         return {
             "ok": False,
             "has_update": False,
             "current_version": VERSION,
             "latest_version": VERSION,
             "release_url": PROJECT_GITHUB_URL,
-            "error": str(exc),
+            "error": error_text,
+            "error_type": error_type,
         }
 
 
